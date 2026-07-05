@@ -62,11 +62,26 @@ hängt sie ans Release.
 
 1. **Download:** Auf GitHub den grünen **„Code"**-Button → **Download ZIP** → entpacken.
    (Oder `git clone https://github.com/steven4code/steven4code.git`.)
-2. **Doppelklick:**
-   - **macOS:** `Start-JarvisHealth.command` — beim allerersten Mal
+2. **Doppelklick — nimm die Datei für DEIN System:**
+   - **macOS:** `Start-JarvisHealth-Mac.command` — beim allerersten Mal
      **Rechtsklick → Öffnen** (Gatekeeper-Abfrage einmalig bestätigen).
-   - **Windows:** `Start-JarvisHealth.bat` — bei SmartScreen-Hinweis
+     Die `…-Windows.bat` funktioniert auf dem Mac **nicht**.
+   - **Windows:** `Start-JarvisHealth-Windows.bat` — bei SmartScreen-Hinweis
      „Weitere Informationen → Trotzdem ausführen".
+
+   <details>
+   <summary>macOS startet die .command nicht? (Troubleshooting)</summary>
+
+   - **„…kann nicht geöffnet werden" (Gatekeeper):** Rechtsklick auf die
+     Datei → **Öffnen** → im Dialog nochmal „Öffnen". Ab macOS Sequoia ggf.
+     stattdessen: Systemeinstellungen → **Datenschutz & Sicherheit** →
+     unten bei der blockierten App **„Dennoch öffnen"**.
+   - **Datei öffnet sich im Editor statt zu starten** (Ausführungsrecht beim
+     Entpacken verloren): Terminal öffnen, `bash ` tippen (mit Leerzeichen),
+     die Datei ins Fenster ziehen, Enter — das funktioniert immer.
+   - Danach meldet sich der Starter mit klaren Schritten; er sagt dir auch,
+     falls Python 3 oder Node.js noch fehlen.
+   </details>
 3. Der Starter richtet beim ersten Mal alles automatisch ein (ein paar
    Minuten), startet die App und **öffnet den Browser** auf
    **http://localhost:8000**. Ab dem zweiten Start dauert es Sekunden.
