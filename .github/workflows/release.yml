@@ -1,0 +1,108 @@
+# Baut Ein-Datei-Apps (Windows .exe, macOS Intel + Apple Silicon, Linux)
+# und hängt sie an das GitHub-Release.
+#
+# Auslösen:
+#   - Tag pushen:  git tag v2.0.0 && git push origin v2.0.0
+#   - oder manuell: Actions-Tab → "Release-Apps bauen" → Run workflow
+name: Release-Apps bauen
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.artifact }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: JarvisHealth-Windows.exe
+          - os: macos-latest # Apple Silicon (M1/M2/M3…)
+            artifact: JarvisHealth-macOS-AppleSilicon.zip
+          - os: macos-13 # Intel-Macs
+            artifact: JarvisHealth-macOS-Intel.zip
+          - os: ubuntu-latest
+            artifact: JarvisHealth-Linux.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend bauen
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python-Abhängigkeiten
+        run: pip install -r backend/requirements.txt pyinstaller
+
+      - name: App bündeln (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          pyinstaller --onefile --name JarvisHealth \
+            --add-data "frontend/dist:frontend_dist" \
+            --add-data "backend/.env.example:." \
+            --collect-all uvicorn \
+            --paths backend \
+            backend/launcher.py
+
+      - name: App bündeln (Windows)
+        if: runner.os == 'Windows'
+        run: pyinstaller --onefile --name JarvisHealth --add-data "frontend/dist;frontend_dist" --add-data "backend/.env.example;." --collect-all uvicorn --paths backend backend/launcher.py
+
+      - name: Paketieren (macOS — zip erhält Ausführungsrechte)
+        if: runner.os == 'macOS'
+        working-directory: dist
+        run: zip -X "${{ matrix.artifact }}" JarvisHealth
+
+      - name: Paketieren (Linux)
+        if: runner.os == 'Linux'
+        working-directory: dist
+        run: tar czf "${{ matrix.artifact }}" JarvisHealth
+
+      - name: Paketieren (Windows)
+        if: runner.os == 'Windows'
+        run: Move-Item dist/JarvisHealth.exe "dist/${{ matrix.artifact }}"
+
+      - name: Smoke-Test (startet die App und prüft /health)
+        if: runner.os != 'Windows'
+        working-directory: dist
+        shell: bash
+        run: |
+          BIN=./JarvisHealth
+          [ -f "$BIN" ] || BIN=$(ls JarvisHealth* | head -1)
+          chmod +x "$BIN" 2>/dev/null || true
+          "$BIN" & APP_PID=$!
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8000/health && ok=1 && break || sleep 1
+          done
+          kill $APP_PID || true
+          [ "${ok:-}" = "1" ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+      - name: An Release anhängen
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.artifact }}
+          generate_release_notes: true

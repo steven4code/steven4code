@@ -7,3 +7,4 @@ httpx==0.28.1
 python-dotenv==1.0.1
 # Lets pydantic/FastAPI evaluate `X | None` annotations on Python 3.9.
 eval-type-backport==0.2.2
+tzdata>=2024.1  # Zoneinfo-Daten für Windows (TIMEZONE-Setting)
