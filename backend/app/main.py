@@ -8,6 +8,7 @@ http://localhost:8000 (Grundlage der Doppelklick-Starter). Im Dev-Betrieb
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -59,6 +60,10 @@ def healthcheck() -> dict:
 
 
 # Gebautes Frontend als Catch-all mounten (nach den API-Routen).
-_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+# In der Ein-Datei-App (PyInstaller) liegt es im entpackten Bundle.
+if getattr(sys, "frozen", False):
+    _DIST = Path(sys._MEIPASS) / "frontend_dist"  # type: ignore[attr-defined]
+else:
+    _DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if _DIST.is_dir():
     app.mount("/", StaticFiles(directory=_DIST, html=True), name="spa")

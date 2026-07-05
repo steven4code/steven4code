@@ -33,6 +33,33 @@ React + Vite + Recharts. Läuft komplett lokal.
 
 ## 1. Starten — Download + Doppelklick
 
+### Der einfachste Weg: fertige App (keine Installation nötig)
+
+Auf der **[Releases-Seite](https://github.com/steven4code/steven4code/releases/latest)**
+die passende Datei laden und **doppelklicken** — die App startet und öffnet
+den Browser auf http://localhost:8000. Kein Python, kein Node, kein Docker.
+
+| System | Datei | Erster Start |
+| --- | --- | --- |
+| Windows | `JarvisHealth-Windows.exe` | SmartScreen: „Weitere Informationen → Trotzdem ausführen" |
+| Mac (M1/M2/M3…) | `JarvisHealth-macOS-AppleSilicon.zip` | entpacken, dann **Rechtsklick → Öffnen** (einmalig) |
+| Mac (Intel) | `JarvisHealth-macOS-Intel.zip` | entpacken, dann **Rechtsklick → Öffnen** (einmalig) |
+| Linux | `JarvisHealth-Linux.tar.gz` | `tar xzf …` und `./JarvisHealth` |
+
+Deine Daten (Einstellungen, `.env`, lokale Datenbank) liegen im
+Benutzerprofil (`~/Library/Application Support/JarvisHealth` auf dem Mac,
+`%APPDATA%\JarvisHealth` auf Windows) — App-Datei verschieben oder
+aktualisieren ist jederzeit problemlos.
+
+Für echte Google-Health-Daten: die `.env` in diesem Datenordner anpassen
+(Client-ID/Secret eintragen, `USE_MOCK_PROVIDER=false`) und App neu starten.
+
+Neue App-Versionen entstehen automatisch: Tag pushen (`git tag v2.x.x &&
+git push origin v2.x.x`) → GitHub Actions baut alle vier Varianten und
+hängt sie ans Release.
+
+### Alternativ: aus dem Quellcode
+
 1. **Download:** Auf GitHub den grünen **„Code"**-Button → **Download ZIP** → entpacken.
    (Oder `git clone https://github.com/steven4code/steven4code.git`.)
 2. **Doppelklick:**
