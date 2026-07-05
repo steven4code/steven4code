@@ -1,14 +1,17 @@
 import { hm } from "./format.js";
+import { STAGE as STAGE_COLOR } from "../theme.js";
 
-// Bevel/Google-style sleep course: stages in 4 lanes across the night.
+// Schlafverlauf in 4 Spuren über die Nacht. Identität trägt die Spur
+// (Position), Farbe verstärkt nur — deshalb ist die Palette hier auch
+// mit Labels abgesichert (validiert, docs/DESIGN.md §3).
 const STAGE = {
-  awake: { lane: 0, color: "#6b7390" },
-  rem: { lane: 1, color: "#a78bfa" },
-  light: { lane: 2, color: "#38bdf8" },
-  deep: { lane: 3, color: "#6366f1" },
+  awake: { lane: 0, color: STAGE_COLOR.awake },
+  rem: { lane: 1, color: STAGE_COLOR.rem },
+  light: { lane: 2, color: STAGE_COLOR.light },
+  deep: { lane: 3, color: STAGE_COLOR.deep },
 };
 const LANE_LABELS = ["Wach", "REM", "Leicht", "Tief"];
-const LANE_H = 22, GAP = 6, LANES = 4;
+const LANE_H = 20, GAP = 6, LANES = 4;
 const H = LANES * LANE_H + (LANES - 1) * GAP;
 const W = 1000;
 
@@ -24,12 +27,12 @@ export default function Hypnogram({ stages }) {
     x += w;
     return r;
   });
-  // Thin connectors between consecutive segments (stepped look).
+  // Dünne Verbinder zwischen aufeinanderfolgenden Segmenten (Treppen-Optik).
   const links = [];
   for (let i = 1; i < rects.length; i++) {
     const a = rects[i - 1], b = rects[i];
     const ay = a.y + LANE_H / 2, by = b.y + LANE_H / 2;
-    links.push(<line key={`l${i}`} x1={b.x} y1={ay} x2={b.x} y2={by} stroke="#2a2a33" strokeWidth="2" />);
+    links.push(<line key={`l${i}`} x1={b.x} y1={ay} x2={b.x} y2={by} stroke="#2A303B" strokeWidth="2" />);
   }
 
   return (
@@ -37,7 +40,7 @@ export default function Hypnogram({ stages }) {
       <div className="hypno-labels">{LANE_LABELS.map((l) => <span key={l}>{l}</span>)}</div>
       <svg className="hypno-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height: H }}>
         {[0, 1, 2, 3].map((l) => (
-          <rect key={`bg${l}`} x="0" y={l * (LANE_H + GAP)} width={W} height={LANE_H} fill="#14141a" rx="4" />
+          <rect key={`bg${l}`} x="0" y={l * (LANE_H + GAP)} width={W} height={LANE_H} fill="#10141b" rx="4" />
         ))}
         {links}
         {rects.map((r) => (
