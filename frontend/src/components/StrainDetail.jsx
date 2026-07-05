@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  ResponsiveContainer, AreaChart, Area, LineChart, Line, ReferenceLine,
+  ResponsiveContainer, ComposedChart, Area, LineChart, Line, ReferenceLine,
 } from "recharts";
 import { getStrainDetail } from "../api.js";
 import { BackBar, BulletMeter, Kpi, RangePicker } from "./ui.jsx";
@@ -77,9 +77,9 @@ export default function StrainDetail({ onBack }) {
         </>
       )}
 
-      <h3>Verlauf heute — Akkumulation, projiziert ab {c.now_hour}:00</h3>
+      <h3>Verlauf heute — Ist bis {c.now_hour}:00, danach Prognose (28-T-Median-Tagesprofil)</h3>
       <ResponsiveContainer width="100%" height={230}>
-        <AreaChart data={c.intraday} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+        <ComposedChart data={c.intraday} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
           {AreaGradient({ id: "strainDetailGrad", color: col })}
           {Grid()}
           {XAxisHour({ tickFormatter: (h) => `${h}h` })}
@@ -88,8 +88,9 @@ export default function StrainDetail({ onBack }) {
           <ReferenceLine y={c.target_high} stroke={STATUS.good} strokeOpacity={0.5} strokeDasharray="4 4" />
           <ReferenceLine y={c.target_low} stroke={STATUS.good} strokeOpacity={0.25} strokeDasharray="4 4" />
           <ReferenceLine x={c.now_hour} stroke={CHART.refline} />
-          <Area type="monotone" dataKey="strain" name="Belastung" stroke={col} strokeWidth={2} fill="url(#strainDetailGrad)" dot={false}  isAnimationActive={false} />
-        </AreaChart>
+          <Area type="monotone" dataKey="strain" name="Belastung" stroke={col} strokeWidth={2} fill="url(#strainDetailGrad)" dot={false} isAnimationActive={false} />
+          <Line type="monotone" dataKey="forecast" name="Prognose" stroke={col} strokeWidth={1.6} strokeDasharray="5 4" strokeOpacity={0.75} dot={false} isAnimationActive={false} />
+        </ComposedChart>
       </ResponsiveContainer>
 
       <h3>Tägliche Belastung · {days === 7 ? "Woche" : `${days} Tage`}</h3>

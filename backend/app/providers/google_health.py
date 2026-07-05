@@ -200,14 +200,22 @@ class GoogleHealthProvider:
         self._sum_interval("active-energy-burned", "activeEnergyBurned", "kcal", lo, hi, slot, "active_energy_kcal")
         self._sum_interval("active-zone-minutes", "activeZoneMinutes", "activeZoneMinutes", lo, hi, slot, "azm", as_int=True)
 
-        # All-day time-in-zone -> per-day [z1..z5] minutes.
+        # All-day time-in-zone rollups (Google-Zonen) — nur als FALLBACK für
+        # Tage ohne Minuten-HF, damit ein konsistentes Zonensystem entsteht.
         self._all_day_zones(lo, hi, slot)
 
-        # Intraday HR for today -> hourly [z1..z5] minutes (for the live curve).
+        # Konsistente Zonenquelle: Minuten-HF je Tag, klassifiziert mit den
+        # persönlichen LTHR-Zonen. Liefert intraday_zones (Stundenkurve) UND
+        # überschreibt die Tages-Zonenminuten (hr_zone_minutes) — dieselben
+        # Zonen für τ-Eichung, Historie und Live-Kurve.
         try:
-            self._intraday_today(end, by_date, slot)
+            bounds = self._personal_zone_bounds()
+            day = start
+            while day <= end:
+                self._minute_zones_for_day(day, slot, bounds)
+                day += dt.timedelta(days=1)
         except Exception as exc:  # noqa: BLE001
-            log.warning("Google Health intraday HR failed: %s", exc)
+            log.warning("Google Health minute-HR zones failed: %s", exc)
 
         return [by_date[d] for d in sorted(by_date)]
 
@@ -254,20 +262,29 @@ class GoogleHealthProvider:
         for day, zones in acc.items():
             slot(day).hr_zone_minutes = [round(x, 1) for x in zones]
 
-    def _intraday_today(self, day, by_date, slot):
+    def _personal_zone_bounds(self):
         from ..services.profile import get_profile, zone_bounds
 
         with SessionLocal() as db:
             prof = get_profile(db)
             resting = float(prof.resting_hr_override) if prof.resting_hr_override else 55.0
             zones = zone_bounds(prof, resting)
-        bounds = [(z["hr_low"], z["hr_high"]) for z in zones]
+        return [(z["hr_low"], z["hr_high"]) for z in zones]
+
+    def _minute_zones_for_day(self, day, slot, bounds):
+        """Minuten-HF eines Tages -> Stunden-Buckets [24][z1..z5] + Tages-Summen.
+
+        Ersetzt Googles LIGHT..PEAK-Rollups durch die persönlichen LTHR-Zonen,
+        damit Historie und Live-Kurve dasselbe Zonensystem nutzen. Tage ohne
+        Samples behalten den Rollup-Fallback aus _all_day_zones."""
         nxt = (day + dt.timedelta(days=1)).isoformat()
         flt = (
             f'heart_rate.sample_time.physical_time >= "{day.isoformat()}T00:00:00Z" AND '
             f'heart_rate.sample_time.physical_time < "{nxt}T00:00:00Z"'
         )
         points = self._list("heart-rate", flt, page_size=1000)
+        if not points:
+            return
         buckets = [[0.0] * 5 for _ in range(24)]
         for p in points:
             hr = p.get("heartRate") or {}
@@ -284,7 +301,9 @@ class GoogleHealthProvider:
             if zi < 0:  # resting / sub-Z1 -> contributes no load
                 continue
             buckets[hour][zi] += 1.0  # ~1 sample/minute
-        slot(day).intraday_zones = [[round(x, 1) for x in b] for b in buckets]
+        s = slot(day)
+        s.intraday_zones = [[round(x, 1) for x in b] for b in buckets]
+        s.hr_zone_minutes = [round(sum(b[i] for b in buckets), 1) for i in range(5)]
 
     def fetch_workouts(self, start: dt.date, end: dt.date) -> list[WorkoutData]:
         lo = start.isoformat()
@@ -515,6 +534,8 @@ def _norm_exercise_type(etype: str) -> str:
     s = (etype or "").lower()
     if "padel" in s:
         return "padel"
+    if "soccer" in s or "futsal" in s or "fussball" in s or ("football" in s and "american" not in s):
+        return "soccer"
     if "run" in s or "jog" in s or "treadmill" in s:
         return "run"
     if "bik" in s or "cycl" in s or "spinning" in s:

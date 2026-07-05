@@ -1,10 +1,11 @@
-import { ResponsiveContainer, AreaChart, Area, ReferenceLine } from "recharts";
+import { ResponsiveContainer, ComposedChart, Area, Line, ReferenceLine } from "recharts";
 import { CardButton, CardHead, Chip } from "./ui.jsx";
 import { num } from "./format.js";
 import { strainColor, strainTone, STATUS, CHART } from "../theme.js";
 import { AreaGradient, ChartTip, Grid, XAxisHour, YAxisNum } from "./chart.jsx";
 
-// Tages-Belastung: Akkumulation über den Tag gegen das Zielband.
+// Tages-Belastung: Ist-Akkumulation bis "jetzt" (Fläche) + echte Prognose
+// bis Tagesende (gestrichelte Linie, aus dem 28-Tage-Median-Tagesprofil).
 // (Das Budget-Meter und die Empfehlung wohnen in der Coach-Karte.)
 export default function StrainCard({ card, onOpen }) {
   if (!card || card.empty) return null;
@@ -18,7 +19,7 @@ export default function StrainCard({ card, onOpen }) {
       />
 
       <ResponsiveContainer width="100%" height={150}>
-        <AreaChart data={card.intraday} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+        <ComposedChart data={card.intraday} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
           {AreaGradient({ id: "strainDayGrad", color: color })}
           {Grid()}
           {XAxisHour()}
@@ -35,12 +36,24 @@ export default function StrainCard({ card, onOpen }) {
             strokeWidth={2}
             fill="url(#strainDayGrad)"
             dot={false}
-           isAnimationActive={false} />
-        </AreaChart>
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="forecast"
+            name="Prognose"
+            stroke={color}
+            strokeWidth={1.6}
+            strokeDasharray="5 4"
+            strokeOpacity={0.75}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
       </ResponsiveContainer>
       <span className="meter-note">
-        Gestrichelt = Zielband {num(card.target_low, 0)}–{num(card.target_high, 0)} · senkrecht = jetzt
-        ({card.now_hour}:00), danach Projektion
+        Grün gestrichelt = Zielband {num(card.target_low, 0)}–{num(card.target_high, 0)} · senkrecht = jetzt
+        ({card.now_hour}:00) · gestrichelte Kurve = Prognose aus deinem typischen Tagesprofil (28-T-Median)
       </span>
     </CardButton>
   );

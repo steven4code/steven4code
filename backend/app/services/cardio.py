@@ -1,38 +1,68 @@
 """Cardio Load — run-specific training-system distribution (gold-standard).
 
-What it answers: *which endurance systems have I loaded this week, how does that
-compare to the ideal mix for fast 5-10 km, and what should I do next?*
+What it answers: *which session gives me the biggest marginal benefit toward my
+running goals right now — given the multi-sport load (run, padel, football, …)
+of the last days — or do I need complete rest?*
 
 Key ideas (all evidence-based):
 1. RUN-SPECIFIC load. Adaptations are specific (SAID principle). Central/aerobic
    adaptations transfer moderately across modalities; running economy & vVO2max
    are gait-specific and barely transfer. So every zone-minute is multiplied by a
    modality x zone "specificity" factor -> RUN-EQUIVALENT minutes. Running = 100%;
-   padel counts only partially, and less in the race-pace zones (Tanaka 1994
-   cross-training review; Burnley & Jones intensity domains).
+   game sports count partially — football more than padel because it is running-
+   based (large aerobic gains: Krustrup et al., "Football as Medicine" line of
+   studies), racket sports less (Tanaka 1994 cross-training review; Burnley &
+   Jones intensity domains).
 2. THREE systems (from the chosen Z1-2 / Z3 / Z4-5 grouping):
    - Aerobe Basis (Z1-2): mitochondria, capillaries, stroke volume.
-   - Grauzone (Z3): tempo / sub-threshold.
+   - Grauzone (Z3): tempo — treated as a CAP, not a target (polarized doctrine:
+     Z3 dilutes both ends; Seiler). Zero Z3 is fine; too much gets flagged.
    - Intensiv (Z4-5): threshold + VO2max — the 5-10 km ceiling.
-3. TARGET = a quality-heavy distribution (70/10/20) of the athlete's sustainable
-   weekly run-equivalent volume (chronic load -> safe progression). VO2max trend
-   informs the recommendation.
+3. TARGET MIX follows the training goal from Settings (MODELS below); the weekly
+   volume target is HYBRID: anchored on chronic (28d) load for safe progression
+   (ACWR logic, Gabbett 2016) but ramping gently (max +10%/wk) toward a
+   goal-specific anchor so easy weeks don't erode the plan.
 4. The biggest *relative* deficit drives the recommendation, validated against how
    recovery actually responds to each session type, and against the run-specificity
    of recent intensity (a padel-heavy week still lacks a real running stimulus).
+   Low recovery always wins: then the answer is rest, not another stimulus.
 """
 from __future__ import annotations
 
 import datetime as dt
 import statistics
 
-# Target distribution (user-selected: quality-heavy). Fractions sum to 1.
-MODEL = {"basis": 0.70, "grauzone": 0.10, "intensiv": 0.20}
+# Ziel-Mix je Trainingsziel (Settings → profile.training_goal).
+# Grauzone-Anteil ist ein DECKEL (siehe _sys_target), kein Soll.
+MODELS = {
+    "run_5_10k": {"basis": 0.80, "grauzone": 0.05, "intensiv": 0.15},   # polarisiert (Seiler)
+    "pyramidal": {"basis": 0.70, "grauzone": 0.20, "intensiv": 0.10},
+    "general": {"basis": 0.70, "grauzone": 0.20, "intensiv": 0.10},
+    "competition": {"basis": 0.70, "grauzone": 0.10, "intensiv": 0.20},  # qualitätslastig
+}
+GOAL_LABEL = {
+    "run_5_10k": "Schnelle 5–10 km (polarisiert)",
+    "pyramidal": "Pyramidal",
+    "general": "Allgemeine Fitness",
+    "competition": "Wettkampf Ausdauer",
+}
+# Ziel-Anker: wöchentliches Lauf-Äquivalent-Volumen (min), auf das das Soll
+# sanft zuläuft (Hybrid-Modell, max +10 %/Woche bei ruhiger Rampe).
+GOAL_ANCHOR_MIN = {
+    "run_5_10k": 210.0,
+    "pyramidal": 180.0,
+    "general": 150.0,
+    "competition": 240.0,
+}
+DEFAULT_GOAL = "run_5_10k"
 
 # Modality x zone run-specificity (fraction of each zone-minute that counts as a
 # run-equivalent training stimulus). Run = 1.0 everywhere (the goal modality).
+# Values are literature-guided ESTIMATES (direction from Tanaka 1994 / Krustrup
+# et al.), not measured constants — treat as calibratable assumptions.
 SPECIFICITY = {
     "run": [1.00, 1.00, 1.00, 1.00, 1.00],
+    "soccer": [0.75, 0.80, 0.70, 0.55, 0.45],  # spielbasiertes Laufen: hoher Transfer
     "ride": [0.65, 0.70, 0.60, 0.45, 0.40],
     "padel": [0.50, 0.55, 0.45, 0.30, 0.25],
     "other": [0.55, 0.60, 0.50, 0.35, 0.30],
@@ -40,6 +70,8 @@ SPECIFICITY = {
 
 ZONE_WEIGHTS = [1, 2, 3, 4, 5]
 MIN_WEEK_TARGET = 90.0  # floor for a sensible weekly run-equivalent target (min)
+GRAUZONE_CAP_FLOOR = 20.0  # min sinnvoller Z3-Deckel (ein zügiger Abschnitt)
+SAFE_RAMP_RATIO = 1.2  # ACWR, unterhalb dessen das Soll wachsen darf
 
 GOAL_TARGETS = {  # legacy polarization context (kept for the detail view)
     "run_5_10k": {"low": 80, "grey": 5, "high": 15},
@@ -74,9 +106,12 @@ def _req_total(w):
     return sum(_req_zones(w))
 
 
+GAME_TYPES = {"padel", "soccer"}  # Spielsportarten: nur teilweise lauf-spezifisch
+
+
 def _systems_req(workouts):
     agg = [0.0] * 5
-    padel_req = 0.0
+    game_req = 0.0
     total = 0.0
     for w in workouts:
         rz = _req_zones(w)
@@ -84,8 +119,8 @@ def _systems_req(workouts):
             agg[i] += rz[i]
         s = sum(rz)
         total += s
-        if w.type == "padel":
-            padel_req += s
+        if w.type in GAME_TYPES:
+            game_req += s
     return {
         "zones": agg,
         "basis": agg[0] + agg[1],
@@ -94,7 +129,7 @@ def _systems_req(workouts):
         "z4": agg[3],
         "z5": agg[4],
         "total": total,
-        "padel_req": padel_req,
+        "game_req": game_req,
     }
 
 
@@ -114,16 +149,21 @@ def _ewma(daily, n):
     return val
 
 
-def _sys_target(total, frac):
+def _sys_target(total, frac, cap=False):
+    """Zielband je System. Grauzone (cap=True) ist ein Deckel: 0 min ist ok,
+    nur Überschreiten wird geflaggt (polarisierte Lehre, Seiler)."""
     mid = total * frac
-    return {"lo": round(mid * 0.85), "hi": round(mid * 1.2), "mid": round(mid)}
+    if cap:
+        return {"lo": 0, "hi": round(max(mid * 1.2, GRAUZONE_CAP_FLOOR)),
+                "mid": round(mid), "cap": True}
+    return {"lo": round(mid * 0.85), "hi": round(mid * 1.2), "mid": round(mid), "cap": False}
 
 
 def _status(actual, tgt):
-    if actual < tgt["lo"]:
-        return "under"
     if actual > tgt["hi"]:
         return "over"
+    if not tgt.get("cap") and actual < tgt["lo"]:
+        return "under"
     return "ok"
 
 
@@ -148,10 +188,18 @@ def build_cardio(workouts, rows, profile, resting_hr, recovery_by_date) -> dict:
     acute_weekly = sum(daily_req[-7:])
     ratio = round(_ewma(daily_edw, 7) / _ewma(daily_edw, 28), 2) if _ewma(daily_edw, 28) else None
 
-    # Safe progressive overload: nudge the target up only when ramp is gentle.
-    target_total = max(MIN_WEEK_TARGET, chronic_weekly)
-    if ratio is not None and ratio < 1.2:
-        target_total *= 1.05
+    goal = profile.training_goal if profile.training_goal in MODELS else DEFAULT_GOAL
+    model = MODELS[goal]
+    anchor = GOAL_ANCHOR_MIN[goal]
+
+    # Hybrid-Wochensoll: chronisch verankert (sichere Progression, ACWR-Logik)
+    # + sanfte Rampe Richtung Ziel-Anker (max +10 %/Wo, nur bei ruhiger Rampe).
+    base = max(MIN_WEEK_TARGET, chronic_weekly)
+    safe = ratio is None or ratio < SAFE_RAMP_RATIO
+    if base < anchor:
+        target_total = min(anchor, base * 1.10) if safe else base
+    else:
+        target_total = base * (1.05 if safe else 1.0)
 
     wk = _in_range(workouts, today - dt.timedelta(days=6), today)
     sysreq = _systems_req(wk)
@@ -162,17 +210,18 @@ def build_cardio(workouts, rows, profile, resting_hr, recovery_by_date) -> dict:
         ("grauzone", "Grauzone / Tempo", "Z3"),
         ("intensiv", "Intensiv (Schwelle + VO₂max)", "Z4–Z5"),
     ):
-        tgt = _sys_target(target_total, MODEL[key])
+        tgt = _sys_target(target_total, model[key], cap=(key == "grauzone"))
         actual = round(sysreq[key])
         systems.append({
             "key": key, "label": label, "zones": zones,
             "actual_min": actual, "target_lo": tgt["lo"], "target_hi": tgt["hi"],
-            "target_mid": tgt["mid"], "target_pct": round(MODEL[key] * 100),
+            "target_mid": tgt["mid"], "target_pct": round(model[key] * 100),
+            "cap": tgt["cap"],
             "pct_of_target": round(actual / tgt["mid"] * 100) if tgt["mid"] else None,
             "status": _status(actual, tgt),
         })
 
-    padel_share = round(sysreq["padel_req"] / sysreq["total"] * 100) if sysreq["total"] else 0
+    game_share = round(sysreq["game_req"] / sysreq["total"] * 100) if sysreq["total"] else 0
 
     last7 = daily_edw[-7:]
     monotony = (
@@ -187,14 +236,14 @@ def build_cardio(workouts, rows, profile, resting_hr, recovery_by_date) -> dict:
     recovery_today = recovery_by_date.get(today)
     cost = _recovery_cost(workouts, recovery_by_date, today)
 
-    recs = _recommendations(systems, sysreq, padel_share, ratio, monotony,
+    recs = _recommendations(systems, sysreq, game_share, ratio, monotony,
                             cost, vo2_trend, recovery_today, wk)
 
     week = {
         "volume_min": round(sum(w.duration_min for w in wk), 0),
         "distance_km": round(sum(w.distance_km or 0 for w in wk), 1),
         "sessions": len(wk), "runs": sum(1 for w in wk if w.type == "run"),
-        "padel": sum(1 for w in wk if w.type == "padel"),
+        "games": sum(1 for w in wk if w.type in GAME_TYPES),
         "req_total": round(sysreq["total"]),
         "edwards_load": round(sum(edwards_load(w) for w in wk), 0),
         "srpe_load": round(sum(srpe(w) or 0 for w in wk), 0),
@@ -203,12 +252,13 @@ def build_cardio(workouts, rows, profile, resting_hr, recovery_by_date) -> dict:
     return {
         "empty": False,
         "as_of": today.isoformat(),
-        "goal": "Schnelle 5–10 km",
-        "model": {k: round(v * 100) for k, v in MODEL.items()},
+        "goal": GOAL_LABEL[goal],
+        "model": {k: round(v * 100) for k, v in model.items()},
         "systems": systems,
         "week_req_total": round(acute_weekly),
         "target_total": round(target_total),
-        "padel_share_pct": padel_share,
+        "target_anchor": round(anchor),
+        "game_share_pct": game_share,
         "specificity": SPECIFICITY,
         "week": week,
         "load_ratio": ratio,
@@ -226,16 +276,20 @@ def build_cardio(workouts, rows, profile, resting_hr, recovery_by_date) -> dict:
 
 
 def _ratio_status(ratio):
+    """Einheitliche ACWR-Stufen (Gabbett-Sweet-Spot 0,8–1,3):
+    low < 0,8 · ok 0,8–1,3 · elevated 1,3–1,5 · high > 1,5."""
     if ratio is None:
         return "unknown"
     if ratio > 1.5:
         return "high"
+    if ratio > 1.3:
+        return "elevated"
     if ratio < 0.8:
         return "low"
     return "ok"
 
 
-def _recommendations(systems, sysreq, padel_share, ratio, monotony, cost,
+def _recommendations(systems, sysreq, game_share, ratio, monotony, cost,
                      vo2_trend, recovery_today, week_workouts):
     recs = []
     by_key = {s["key"]: s for s in systems}
@@ -260,7 +314,7 @@ def _recommendations(systems, sysreq, padel_share, ratio, monotony, cost,
     # 2. Recovery does not keep up with a session type.
     worst = min([(v, k) for k, v in cost.items() if k != "baseline" and v is not None], default=None)
     if worst is not None and worst[0] <= -6:
-        nice = {"padel": "Padel", "quality_run": "harte Läufe", "easy_run": "Läufe"}[worst[1]]
+        nice = {"game": "Padel/Fußball", "quality_run": "harte Läufe", "easy_run": "Läufe"}[worst[1]]
         recs.append({
             "priority": "high", "title": "Erholung kommt nicht hinterher",
             "detail": f"Nach {nice} liegt deine Erholung am Folgetag im Schnitt {abs(worst[0])} Punkte unter Baseline. "
@@ -277,8 +331,9 @@ def _recommendations(systems, sysreq, padel_share, ratio, monotony, cost,
         })
 
     # 4. Biggest relative deficit -> concrete next session.
+    #    Grauzone ist ein Deckel und kann kein Defizit haben.
     deficits = []
-    for s in (basis, grau, intens):
+    for s in (basis, intens):
         if s["target_mid"] and s["actual_min"] < s["target_lo"]:
             deficits.append(((s["target_mid"] - s["actual_min"]) / s["target_mid"], s))
     deficits.sort(reverse=True)
@@ -288,7 +343,7 @@ def _recommendations(systems, sysreq, padel_share, ratio, monotony, cost,
         if s["key"] == "basis" and not any(r["title"] == "Aerobe Basis vernachlässigt" for r in recs):
             recs.append({"priority": "medium", "title": "Mehr aerobe Grundlage",
                          "detail": f"~{need} min ruhiger Z2-Lauf fehlen diese Woche für deinen Mix.",
-                         "source": "Ziel-Mix 70/10/20"})
+                         "source": "Ziel-Mix (Trainingsziel)"})
         elif s["key"] == "intensiv":
             if rec_ok:
                 vo2_note = " Dein VO₂max-Trend ist rückläufig – Zeit für scharfe Reize." if (vo2_trend is not None and vo2_trend < -0.3) else ""
@@ -301,18 +356,24 @@ def _recommendations(systems, sysreq, padel_share, ratio, monotony, cost,
                              "detail": "Intensiv-System unter Ziel, aber Erholung niedrig. Erst regenerieren, "
                                        "harte Reize bei grüner Erholung nachholen.",
                              "source": "Erholungs-validiert"})
-        elif s["key"] == "grauzone":
-            recs.append({"priority": "low", "title": "Etwas Tempo (Z3) ergänzen",
-                         "detail": f"~{need} min Tempo/Schwellen-Anteil fehlen – z.B. ein zügiger Dauerlauf.",
-                         "source": "Ziel-Mix 70/10/20"})
 
-    # 5. Run-specificity gap: intensity came mostly from padel.
-    if padel_share >= 35 and intens["status"] != "over":
+    # 4b. Grauzonen-Deckel überschritten: Z3 verdünnt beide Enden (Seiler).
+    if grau["status"] == "over":
+        recs.append({
+            "priority": "low", "title": "Grauzone begrenzen",
+            "detail": f"{grau['actual_min']} min Z3 diese Woche (Deckel ~{grau['target_hi']} min). "
+                      "Läufe entweder ruhiger (Z2) oder gezielt härter (Z4–Z5) gestalten.",
+            "source": "Polarisiert (Seiler) · Z3 als Deckel",
+        })
+
+    # 5. Run-specificity gap: intensity came mostly from game sports.
+    if game_share >= 35 and intens["status"] != "over":
         recs.append({
             "priority": "medium", "title": "Lauf-spezifische Intensität fehlt",
-            "detail": f"~{padel_share}% deiner Wochenlast stammt aus Padel (nur teilweise lauf-spezifisch). "
-                      "Für 5–10 km braucht es einen echten Lauf-Intensitätsreiz (Intervalle/Tempo).",
-            "source": "Spezifität (SAID) · Padel anteilig angerechnet",
+            "detail": f"~{game_share}% deiner Wochenlast stammt aus Padel/Fußball (nur teilweise "
+                      "lauf-spezifisch). Für deine Laufziele braucht es einen echten "
+                      "Lauf-Intensitätsreiz (Intervalle/Tempo).",
+            "source": "Spezifität (SAID) · Spielsport anteilig angerechnet",
         })
 
     # 6. Monotony.
@@ -348,18 +409,21 @@ def _distribution(workouts):
 
 
 def _recovery_cost(workouts, recovery_by_date, today):
+    """Deskriptiv, nicht kausal: harte Einheiten liegen eher auf erholten Tagen,
+    und die Folgetags-Erholung hängt auch am Schlaf — als Tendenz trotzdem
+    nützlich, um zu sehen, welche Einheitstypen dich am meisten kosten."""
     recent = [v for d, v in recovery_by_date.items()
               if v is not None and d >= today - dt.timedelta(days=28)]
     baseline = statistics.fmean(recent) if recent else None
-    buckets = {"padel": [], "quality_run": [], "easy_run": []}
+    buckets = {"game": [], "quality_run": [], "easy_run": []}
     if baseline is not None:
         for w in workouts:
             nxt = recovery_by_date.get(w.date + dt.timedelta(days=1))
             if nxt is None:
                 continue
             delta = nxt - baseline
-            if w.type == "padel":
-                buckets["padel"].append(delta)
+            if w.type in GAME_TYPES:
+                buckets["game"].append(delta)
             elif _is_quality_run(w):
                 buckets["quality_run"].append(delta)
             elif w.type == "run":

@@ -6,8 +6,8 @@ import { hm, num } from "./format.js";
 import { SYSTEM, INK } from "../theme.js";
 import { ChartTip, Grid, XAxisDate, YAxisNum, fmtDate } from "./chart.jsx";
 
-const TYPE_LABEL = { run: "Lauf", padel: "Padel", ride: "Rad", other: "Sonst" };
-const SPEC_COLS = [["run", "Lauf"], ["padel", "Padel"], ["ride", "Rad"], ["other", "Sonst"]];
+const TYPE_LABEL = { run: "Lauf", padel: "Padel", soccer: "Fußball", ride: "Rad", other: "Sonst" };
+const SPEC_COLS = [["run", "Lauf"], ["soccer", "Fußball"], ["padel", "Padel"], ["ride", "Rad"], ["other", "Sonst"]];
 const ZLAB = ["Z1", "Z2", "Z3", "Z4", "Z5"];
 const STAT_LABEL = { under: "unter Ziel", ok: "im Ziel", over: "über Ziel" };
 const STAT_ICON = { under: "△", ok: "✓", over: "▲" };
@@ -22,7 +22,7 @@ export default function CardioDetail({ onBack }) {
   if (!c || c.empty) return <div className="detail">{bar}<div className="loading">Lade …</div></div>;
 
   const cost = c.recovery_cost || {};
-  const costLabel = { padel: "Padel", quality_run: "Harte Läufe", easy_run: "Lockere Läufe" };
+  const costLabel = { game: "Padel/Fußball", quality_run: "Harte Läufe", easy_run: "Lockere Läufe" };
   const m = c.model || {};
 
   return (
@@ -32,24 +32,29 @@ export default function CardioDetail({ onBack }) {
       <div className="method-box">
         <b>Lauf-spezifische Systemlast.</b> Jede Zonenminute wird mit einem Modalitäts-Faktor in
         <b> Lauf-Äquivalent-Minuten</b> umgerechnet (SAID-Prinzip + Cross-Training-Transfer): Laufen = 100 %,
-        Padel anteilig — zentral/aerob mäßig, renntempo-spezifisch kaum. Ziel-Mix <b>{m.basis}/{m.grauzone}/{m.intensiv}</b>
-        {" "}(qualitätslastig) deines tragbaren Wochenvolumens. Empfehlung = größtes relatives Defizit, validiert an der Erholung.
+        Fußball stärker angerechnet als Padel (spielbasiertes Laufen; Krustrup et al.). Ziel-Mix
+        <b> {m.basis}/{m.grauzone}/{m.intensiv}</b> folgt deinem Trainingsziel ({c.goal}); die <b>Grauzone ist ein
+        Deckel</b>, kein Soll (Seiler). Wochensoll = chronisches Volumen mit sanfter Rampe (max. +10 %/Wo) Richtung
+        Ziel-Anker ~{c.target_anchor}′. Empfehlung = größtes relatives Defizit, validiert an der Erholung — bei
+        niedriger Erholung ist die Antwort immer Ruhe.
       </div>
 
       <h3>Systeme diese Woche — Lauf-Äquivalent vs. Zielband</h3>
       <div className="meter-list" style={{ marginTop: 0 }}>
         {(c.systems || []).map((s) => {
           const max = Math.max(s.actual_min, s.target_hi) * 1.25 || 1;
+          const isCap = s.cap || s.target_lo === 0;
+          const tgt = isCap ? `max. ${hm(s.target_hi)} (Deckel)` : `Ziel ${hm(s.target_lo)}–${hm(s.target_hi)}`;
           return (
             <BulletMeter
               key={s.key}
-              label={`${s.label} · ${s.zones} · Ziel ${s.target_pct}%`}
+              label={`${s.label} · ${s.zones} · ${isCap ? "Deckel" : "Ziel"} ${s.target_pct}%`}
               labelDot={SYSTEM[s.key]}
               value={s.actual_min}
               valueText={hm(s.actual_min)}
-              targetText={`Ziel ${hm(s.target_lo)}–${hm(s.target_hi)} · ${STAT_ICON[s.status]} ${STAT_LABEL[s.status]}`}
+              targetText={`${tgt} · ${STAT_ICON[s.status]} ${STAT_LABEL[s.status]}`}
               max={max}
-              bandLo={s.target_lo}
+              bandLo={isCap ? 0 : s.target_lo}
               bandHi={s.target_hi}
               color={SYSTEM[s.key]}
             />
@@ -58,8 +63,8 @@ export default function CardioDetail({ onBack }) {
       </div>
 
       <div className="kpis">
-        <Kpi label="Woche (Lauf-Äq.)" value={`${num(c.week_req_total, 0)}′`} sub={`Ziel ~${num(c.target_total, 0)}′`} />
-        <Kpi label="Padel-Anteil" value={`${num(c.padel_share_pct, 0)}%`} sub="anteilig angerechnet" />
+        <Kpi label="Woche (Lauf-Äq.)" value={`${num(c.week_req_total, 0)}′`} sub={`Soll ~${num(c.target_total, 0)}′ · Anker ${num(c.target_anchor, 0)}′`} />
+        <Kpi label="Spielsport-Anteil" value={`${num(c.game_share_pct, 0)}%`} sub="Padel/Fußball, anteilig" />
         <Kpi label="akut:chronisch" value={num(c.load_ratio, 2)} sub={c.load_ratio_status} />
         <Kpi label="Monotonie" value={num(c.monotony, 2)} />
         <Kpi label="VO₂max" value={num(c.vo2max, 1)} sub={c.vo2_trend == null ? "" : `${c.vo2_trend > 0 ? "+" : ""}${num(c.vo2_trend, 1)} / 6 Wo.`} />
@@ -100,7 +105,7 @@ export default function CardioDetail({ onBack }) {
 
       <h3>Erholungs-Kosten je Einheitstyp — Δ Erholung am Folgetag vs. Baseline {num(cost.baseline, 0)}</h3>
       <div className="kpis">
-        {["padel", "quality_run", "easy_run"].map((k) => (
+        {["game", "quality_run", "easy_run"].map((k) => (
           <Kpi key={k} label={costLabel[k]} value={cost[k] == null ? "–" : `${cost[k] > 0 ? "+" : ""}${num(cost[k], 1)}`} />
         ))}
       </div>

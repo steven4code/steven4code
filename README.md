@@ -6,8 +6,9 @@ mit **wissenschaftlich fundierten** Eigenberechnungen.
 **Oberfläche:** aufgeräumter, einspaltiger Feed im Bevel-Stil – eine Metrik pro
 Karte (großer Wert + Sparkline + 1 Satz Klartext), Tap öffnet die Detailansicht.
 Zusätzliche Karten: VO₂max, Ruhepuls, HFV, Schritte, aktive Energie, Active Zone
-Minutes. Der **Strain** nutzt echte **Ganztags-/Intraday-HF** (Minuten-Puls für
-heute, Tages-Zonen-Rollups für die Historie).
+Minutes. Der **Strain** nutzt echte **Ganztags-Minuten-HF** — für Historie wie
+Live-Kurve dasselbe persönliche LTHR-Zonensystem — und prognostiziert den Rest
+des Tages aus deinem typischen Tagesprofil.
 
 Kernmetriken:
 
@@ -30,10 +31,23 @@ React + Vite + Recharts. Läuft komplett lokal.
 
 ---
 
-## 1. Lokal testen (sofort, ohne Konto)
+## 1. Starten — der einfachste Weg (Docker, 3 Befehle)
 
 Standardmäßig läuft alles mit einem **Demo-Provider** (realistische Beispieldaten,
-deterministisch). Kein Google-Konto nötig.
+deterministisch). Kein Google-Konto nötig. Voraussetzung: [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+```bash
+git clone https://github.com/steven4code/steven4code.git jarvishealth && cd jarvishealth
+cp backend/.env.example backend/.env
+docker compose up --build
+```
+
+→ **http://localhost:5173** öffnen. Fertig. Die App synchronisiert beim Start
+automatisch. Unter ⚙ kannst du Max-HF, LTHR, Trainingsziel und Schlafbedarf
+einstellen — das **Trainingsziel steuert den Ziel-Mix** der Trainingssysteme.
+
+<details>
+<summary>Alternative ohne Docker (Python + Node)</summary>
 
 ```bash
 # Backend (Terminal 1)
@@ -48,9 +62,40 @@ cd frontend
 npm install
 npm run dev
 ```
+</details>
 
-→ **http://localhost:5173** öffnen. Die App synchronisiert beim Start automatisch.
-Unter ⚙ kannst du Max-HF (194), LTHR, Trainingsziel und Schlafbedarf einstellen.
+---
+
+## 1b. Mit Freunden teilen
+
+Kurzfassung: **Deine Freunde brauchen KEINE eigene Google-Cloud-Konfiguration.**
+Sie melden sich nur mit ihrem eigenen Google-Konto an — die einmalige
+API-Einrichtung machst nur du (der „Host" des OAuth-Clients).
+
+So funktioniert es:
+
+1. **Du (einmalig):** OAuth-Client in der Google Cloud Console anlegen
+   (Abschnitt 2 unten) und deine Freunde unter *OAuth consent screen →
+   Test users* mit ihrer Gmail-Adresse eintragen (bis zu 100 Testnutzer).
+2. **Jeder Freund:** Repo klonen, deine `backend/.env` bekommen (enthält
+   `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`, `USE_MOCK_PROVIDER=false`),
+   `docker compose up --build`, dann im Login-Screen **„Mit Google anmelden"**
+   mit dem eigenen Konto.
+3. Fertig — jede Person sieht ausschließlich die **eigenen** Daten.
+
+Wichtig zu wissen:
+
+- **Jede Person betreibt ihre eigene Instanz** (auf dem eigenen Rechner).
+  Die App ist bewusst Single-User: eine lokale SQLite pro Person, alle
+  Scores werden lokal berechnet, nichts verlässt den eigenen Rechner.
+  Ein gemeinsam gehosteter Server für mehrere Konten ist damit **nicht**
+  möglich (dafür bräuchte die App Multi-User-Support).
+- Das geteilte Client-Secret ist im Freundeskreis vertretbar (es erlaubt
+  nur den Start des Login-Flows; Zugriff auf Daten gibt erst der jeweilige
+  Google-Login der Person). Nicht öffentlich posten.
+- Im OAuth-**Testing**-Modus laufen Refresh-Tokens nach 7 Tagen ab — dann
+  einfach neu anmelden. Für Dauerbetrieb die App in der Cloud Console auf
+  **Produktion** stellen (Google-Verifizierung nötig).
 
 ---
 
@@ -102,10 +147,15 @@ Hinweis: Im OAuth-**Testing**-Modus laufen Refresh-Tokens nach 7 Tagen ab
 
 | Metrik | Kern | Quelle/Standard |
 | --- | --- | --- |
-| Erholung | lnRMSSD vs 60-T-Baseline ±SWC, 7-T-Trend/CV; Mix HFV 50 / HF 20 / Schlaf 30; Temp/Atmung/SpO₂-Flags | Plews/Buchheit; WHOOP/Oura |
-| Strain 0–21 | log. kardiovask. Last; Ziel-Range aus Erholung+Schlaf+ACWR; Rest-Budget → Zonen | WHOOP Strain/Strain-Coach |
-| Schlaf | SRI (30%) + Dauer/Effizienz/Tief/REM/Latenz/WASO; Auto-Bedarf + Debt | Oura; SRI-Mortalitätsstudien |
-| Cardio | LTHR-Zonen; Edwards-TRIMP + sRPE; EWMA/Monotonie; polarisiert 80/20 | Seiler; Foster; HFV-gesteuert |
+| Erholung | Autonomer Kern (lnRMSSD 80 % + Ruhe-HF 20 % vs. 60-T-Baseline ±SWC) × Schlaf-Faktor 0,70–1,00; 7-T-Trend/CV; Temp/Atmung/SpO₂ deckeln auf 50 | Plews 2013; Buchheit 2014 |
+| Belastung 0–100 | Banister-TRIMP aus Ganztags-Minuten-HF (Ruhe ≈ 0); Skala adaptiv auf die eigene 60-T-Verteilung (90.-Perzentil-Tag ≈ 85); Zielband aus Erholung+Schlaf+ACWR; Rest ab „jetzt" als **Prognose** aus dem 28-T-Median-Tagesprofil | Banister 1991; Edwards 1993; Gabbett 2016 |
+| Schlaf | SRI (30 %) + Dauer/Effizienz/Tief/REM/Latenz/WASO; Auto-Bedarf (7–8 h) + 14-T-Defizit; lastadaptive Tiefschlaf-Ziele | Phillips 2017; Windred 2024; Driver & Taylor 2000 |
+| Training | Lauf-Äquivalent-Minuten (Spezifität je Modalität: Fußball > Padel); **Ziel-Mix folgt dem Trainingsziel** (polarisiert 80/5/15 …); **Grauzone = Deckel**, kein Soll; Wochensoll chronisch + Rampe (max. +10 %/Wo) Richtung Ziel-Anker; EWMA-ACWR + Monotonie; bei niedriger Erholung → Ruhe | Seiler; Tanaka 1994; Krustrup; Foster 1998; Williams 2017 |
+
+**Zonen-Konsistenz (Live-Betrieb):** Alle Tage — Historie wie Live-Kurve —
+werden aus dem **Minuten-Puls-Stream** mit deinen persönlichen LTHR-Zonen
+berechnet; Googles LIGHT…PEAK-Rollups dienen nur als Fallback für Tage ohne
+HF-Samples. Damit sind τ-Eichung und Tagesvergleiche im selben Zonensystem.
 
 Details inkl. Formeln stehen als Kommentare in `backend/app/services/`
 (`recovery.py`, `strain.py`, `sleep.py`, `cardio.py`, `profile.py`).

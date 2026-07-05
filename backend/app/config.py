@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/health.db"
     frontend_origin: str = "http://localhost:5173"
     sync_lookback_days: int = 90
+    # Lokale Zeitzone für "jetzt"-Berechnungen (Strain-Tageskurve) —
+    # unabhängig von der Server-/Container-Zeitzone.
+    timezone: str = "Europe/Berlin"
 
     @property
     def scopes_list(self) -> list[str]:
