@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { getAuthStatus, getDashboard, runSync } from "./api.js";
-import RecoveryHero from "./components/RecoveryHero.jsx";
+import HeroBrief from "./components/HeroBrief.jsx";
+import CoachCard from "./components/CoachCard.jsx";
 import SleepCard from "./components/SleepCard.jsx";
 import StrainCard from "./components/StrainCard.jsx";
 import CardioCard from "./components/CardioCard.jsx";
-import Vo2Card from "./components/Vo2Card.jsx";
+import TrendGrid from "./components/TrendGrid.jsx";
 import RecoveryDetail from "./components/RecoveryDetail.jsx";
 import StrainDetail from "./components/StrainDetail.jsx";
 import SleepDetail from "./components/SleepDetail.jsx";
@@ -13,18 +14,26 @@ import MetricDetail from "./components/MetricDetail.jsx";
 import Settings from "./components/Settings.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 
-const RANGES = [7, 14, 30, 90];
-const RANGE_LABEL = { 7: "Woche", 14: "14T", 30: "30T", 90: "90T" };
-
+// Feed-Reihenfolge = Entscheidungshierarchie (docs/DESIGN.md §2):
+// Briefing → Coach → Schlaf → Belastung → Training → Trends.
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [days, setDays] = useState(30);
   const [syncing, setSyncing] = useState(false);
+  const [refetching, setRefetching] = useState(false);
   const [error, setError] = useState(null);
   const [view, setView] = useState({ name: "dashboard" });
 
-  const loadDashboard = useCallback(async (d) => setDashboard(await getDashboard(d)), []);
+  // Refetch dimmt den letzten Render, statt ihn zu ersetzen (kein Skeleton-Flackern).
+  const loadDashboard = useCallback(async (d) => {
+    setRefetching(true);
+    try {
+      setDashboard(await getDashboard(d));
+    } finally {
+      setRefetching(false);
+    }
+  }, []);
   const doSync = useCallback(async () => {
     setSyncing(true); setError(null);
     try { await runSync(); } catch (e) { setError(e.message); } finally { setSyncing(false); }
@@ -58,47 +67,59 @@ export default function App() {
     return <Settings onBack={back} onSaved={() => loadDashboard(days)} />;
 
   const d = dashboard && !dashboard.empty ? dashboard : null;
-  const vo2 = (d?.extras || []).find((e) => e.key === "vo2max");
 
   return (
     <div className="app">
       <header className="topbar">
         <div>
           <h1 className="brand">Jarvis<span>Health</span></h1>
-          <p className="sub">
+          <p className="brand-sub">
             {auth?.mock_mode ? <span className="badge mock">Demo-Daten</span>
               : auth?.authenticated ? <span className="badge live">Google Health</span>
               : <span className="badge off">Offline</span>}
-            {d?.as_of && <> · Stand {d.as_of}</>}
           </p>
         </div>
         <div className="controls">
-          <div className="range">
-            {RANGES.map((r) => (
-              <button key={r} className={r === days ? "active" : ""} onClick={() => setDays(r)}>{RANGE_LABEL[r]}</button>
+          <div className="range" role="group" aria-label="Zeitraum">
+            {[7, 14, 30, 90].map((r) => (
+              <button
+                key={r}
+                type="button"
+                className={r === days ? "active" : ""}
+                aria-pressed={r === days}
+                onClick={() => setDays(r)}
+              >
+                {r === 7 ? "Woche" : `${r}T`}
+              </button>
             ))}
           </div>
-          <button className="btn" onClick={() => setView({ name: "settings" })} title="Einstellungen">⚙</button>
-          <button className="btn primary" onClick={onSyncClick} disabled={syncing}>{syncing ? "…" : "Sync"}</button>
+          <button type="button" className="btn icon" onClick={() => setView({ name: "settings" })} aria-label="Einstellungen">
+            ⚙
+          </button>
+          <button type="button" className="btn primary" onClick={onSyncClick} disabled={syncing}>
+            {syncing ? "Synchronisiert …" : "Sync"}
+          </button>
         </div>
       </header>
 
       {error && <div className="error">{error}</div>}
-      {!dashboard && !error && <div className="loading">Lade Dashboard…</div>}
+      {!dashboard && !error && <div className="loading">Lade Tagesbriefing …</div>}
       {dashboard?.empty && <div className="notice">Noch keine Daten. Klicke auf „Sync".</div>}
 
       {d && (
-        <main>
-          <RecoveryHero card={d.recovery} onOpen={() => setView({ name: "recovery" })} />
-
-          <div className="grid2">
-            <SleepCard card={d.sleep} onOpen={() => setView({ name: "sleep" })} />
-            <StrainCard card={d.strain} onOpen={() => setView({ name: "strain" })} />
-          </div>
-
+        <main className={refetching ? "is-refetching" : ""}>
+          <HeroBrief
+            asOf={d.as_of}
+            recovery={d.recovery}
+            strain={d.strain}
+            sleep={d.sleep}
+            onOpen={(name) => setView({ name })}
+          />
+          <CoachCard strain={d.strain} onOpen={() => setView({ name: "strain" })} />
+          <SleepCard card={d.sleep} onOpen={() => setView({ name: "sleep" })} />
+          <StrainCard card={d.strain} onOpen={() => setView({ name: "strain" })} />
           <CardioCard card={d.cardio} onOpen={() => setView({ name: "cardio" })} />
-
-          {vo2 && <Vo2Card extra={vo2} onOpen={() => setView({ name: "metric", extra: vo2 })} />}
+          <TrendGrid extras={d.extras} onOpen={(extra) => setView({ name: "metric", extra })} />
         </main>
       )}
     </div>

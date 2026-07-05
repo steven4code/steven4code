@@ -1,29 +1,29 @@
-// Circular SVG gauge for a 0-100 score.
-export default function ScoreRing({ value, max = 100, size = 132, label }) {
-  const stroke = 12;
+// Instrument-Ring: Status auf einen Blick, Präzision trägt die Zahl im
+// Zentrum (Winkel ist ein grober Kanal — Cleveland & McGill 1984).
+// Track = abgedunkelte Stufe derselben Farbe (Meter-Regel), kein Glow.
+export default function ScoreRing({
+  value,
+  max = 100,
+  size = 64,
+  stroke = 7,
+  color = "var(--accent)",
+  text,
+  textSize,
+}) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = value == null ? 0 : Math.max(0, Math.min(1, value / max));
   const dash = c * pct;
-
-  const color =
-    value == null
-      ? "#3a4256"
-      : value >= 66
-      ? "#34d399"
-      : value >= 40
-      ? "#fbbf24"
-      : "#f87171";
-
   return (
-    <div className="ring" style={{ width: size, height: size }}>
-      <svg width={size} height={size}>
+    <div className="ring-wrap" style={{ width: size, height: size }}>
+      <svg width={size} height={size} aria-hidden>
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="#222838"
+          stroke={color}
+          strokeOpacity={0.16}
           strokeWidth={stroke}
         />
         <circle
@@ -36,13 +36,16 @@ export default function ScoreRing({ value, max = 100, size = 132, label }) {
           strokeLinecap="round"
           strokeDasharray={`${dash} ${c - dash}`}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: "stroke-dasharray 0.6s ease" }}
+          style={{ transition: "stroke-dasharray 0.6s ease-out" }}
         />
       </svg>
-      <div className="ring-center">
-        <div className="ring-value">{value == null ? "–" : Math.round(value)}</div>
-        {label && <div className="ring-label">{label}</div>}
-      </div>
+      {text !== undefined && (
+        <div className="ring-center">
+          <div className="ring-num" style={{ fontSize: textSize || size * 0.3 }}>
+            {text}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
