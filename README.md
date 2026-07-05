@@ -42,8 +42,8 @@ den Browser auf http://localhost:8000. Kein Python, kein Node, kein Docker.
 | System | Datei | Erster Start |
 | --- | --- | --- |
 | Windows | `JarvisHealth-Windows.exe` | SmartScreen: „Weitere Informationen → Trotzdem ausführen" |
-| Mac (M1/M2/M3…) | `JarvisHealth-macOS-AppleSilicon.zip` | entpacken, dann **Rechtsklick → Öffnen** (einmalig) |
-| Mac (Intel) | `JarvisHealth-macOS-Intel.zip` | entpacken, dann **Rechtsklick → Öffnen** (einmalig) |
+| Mac (Apple Silicon, ab 2020) | `JarvisHealth-macOS.zip` | entpacken, dann **Rechtsklick → Öffnen** (einmalig) |
+| Mac (Intel, vor 2020) | — Starter-Skript nutzen (unten) | `Start-JarvisHealth-Mac.command` baut nativ |
 | Linux | `JarvisHealth-Linux.tar.gz` | `tar xzf …` und `./JarvisHealth` |
 
 Deine Daten (Einstellungen, `.env`, lokale Datenbank) liegen im
