@@ -23,10 +23,11 @@ jobs:
         include:
           - os: windows-latest
             artifact: JarvisHealth-Windows.exe
+          # Nur Apple Silicon: GitHub hat die kostenlosen Intel-macOS-Runner
+          # (macos-13) ausgemustert — Intel-Mac-Nutzer verwenden das
+          # Starter-Skript (baut nativ auf dem eigenen Gerät).
           - os: macos-latest # Apple Silicon (M1/M2/M3…)
-            artifact: JarvisHealth-macOS-AppleSilicon.zip
-          - os: macos-13 # Intel-Macs
-            artifact: JarvisHealth-macOS-Intel.zip
+            artifact: JarvisHealth-macOS.zip
           - os: ubuntu-latest
             artifact: JarvisHealth-Linux.tar.gz
     runs-on: ${{ matrix.os }}
