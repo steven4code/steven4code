@@ -6,8 +6,8 @@ stable across reloads but has natural variation. Crucially, recovery inputs
 recovery-validated training logic has something meaningful to react to.
 
 The synthetic athlete trains 6x/week and is intentionally intensity-heavy with
-two padel sessions (lots of Z3/Z4 "grey zone"), which is exactly the pattern the
-cardio engine should flag for a 5-10k goal.
+padel and football sessions (lots of Z3/Z4 "grey zone"), which is exactly the
+pattern the cardio engine should flag for a 5-10k goal.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ _TEMPLATE = {
     2: ("padel", 75, [5, 25, 30, 13, 2]),
     3: ("run_easy", 45, [12, 28, 5, 0, 0]),
     4: ("run_tempo", 50, [8, 14, 18, 10, 0]),
-    5: ("padel", 80, [5, 26, 32, 15, 2]),
+    5: ("soccer", 85, [8, 22, 30, 18, 7]),          # Fußball: intermittent, viel Z3-Z4
     6: ("run_long", 80, [16, 54, 10, 0, 0]),
 }
 
@@ -54,7 +54,7 @@ class MockProvider:
         scale = rng.uniform(0.85, 1.15)
         zmin = [round(z * scale, 1) for z in zones]
         duration = round(sum(zmin), 1)
-        wtype = "padel" if kind == "padel" else "run"
+        wtype = kind if kind in ("padel", "soccer") else "run"
         return kind, wtype, duration, zmin
 
     def _workout_for(self, day: dt.date) -> WorkoutData | None:
@@ -80,6 +80,7 @@ class MockProvider:
             "run_tempo": 6.5,
             "run_intervals": 8.5,
             "padel": 7.5,  # high perceived load despite moderate mean HR
+            "soccer": 8.0,
         }
         rpe = round(rpe_map.get(kind, 5) + rng.uniform(-0.5, 0.5), 1)
         return WorkoutData(

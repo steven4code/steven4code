@@ -26,6 +26,10 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import statistics
+from zoneinfo import ZoneInfo
+
+from ..config import settings
 
 STRAIN_MAX = 100.0
 # Banister intensity factor f(HRr) = HRr * a * e^(b*HRr) (male coefficients).
@@ -38,6 +42,15 @@ BASELINE_DAYS = 60
 TRIMP_REF_FLOOR = 120.0       # min personal reference (new users)
 TARGET_PCT = 0.85             # 90th-percentile day -> ~85 strain
 WAKE_HOUR, SLEEP_HOUR = 6, 23
+FORECAST_DAYS = 28            # Fenster für das typische Tagesprofil (Median)
+
+
+def _local_now() -> dt.datetime:
+    """Lokale Zeit unabhängig von der Container-/Server-Zeitzone."""
+    try:
+        return dt.datetime.now(ZoneInfo(settings.timezone))
+    except Exception:  # noqa: BLE001 — ungültige TZ-Konfiguration
+        return dt.datetime.now()
 
 
 def _zone_trimp(z) -> float:
@@ -117,14 +130,26 @@ def _session_advice(rem_trimp, remaining_pts, status, recovery, rec_status, syst
 
     rec = recovery
     budget_txt = f"Rest-Budget {round(remaining_pts)}"
-    low_rec = (rec is not None and rec < 40) or rec_status == "anomaly"
+    very_low_rec = (rec is not None and rec < 30) or rec_status == "anomaly"
+    low_rec = rec is not None and rec < 40
+
+    # Unterste Stufe zuerst: bei sehr niedriger Erholung oder aktivem
+    # Anomalie-Flag ist die Antwort VOLLSTÄNDIGE Ruhe — kein Training.
+    if very_low_rec:
+        why = ("Anomalie-Flag aktiv (mögliche Erkrankung/Übermüdung)"
+               if rec_status == "anomaly" else f"Erholung sehr niedrig ({round(rec)})")
+        return {
+            "headline": "Vollständige Ruhe", "zone": "—", "tone": "warn",
+            "prescription": "Heute kein Training – Schlaf, Essen, Spazierengehen höchstens",
+            "rationale": why + " → jeder Reiz verlängert jetzt nur die Erholung; "
+            "die Anpassung passiert in der Ruhe.",
+            "source": "Erholungs- & belastungsgekoppelt",
+        }
 
     if status == "over" or low_rec or rem_trimp < 8:
         why = []
-        if rec is not None and rec < 40:
+        if low_rec:
             why.append(f"Erholung niedrig ({round(rec)})")
-        elif rec_status == "anomaly":
-            why.append("Anomalie-Flag aktiv")
         if status == "over":
             why.append("Tagesbudget ausgeschöpft")
         return {
@@ -198,7 +223,7 @@ def build_strain(rows, workouts, recovery, sleep_score, load_ratio, series_days=
     daily_trimp = [_day_trimp(r, by_date.get(r.date, [])) for r in rows]
     tau = _personal_tau(daily_trimp[-BASELINE_DAYS:])
 
-    now_hour = max(WAKE_HOUR, min(SLEEP_HOUR, dt.datetime.now().hour))
+    now_hour = max(WAKE_HOUR, min(SLEEP_HOUR, _local_now().hour))
 
     intr = None
     if today_row.intraday_zones:
@@ -207,29 +232,43 @@ def build_strain(rows, workouts, recovery, sleep_score, load_ratio, series_days=
         except (ValueError, TypeError):
             intr = None
 
+    # Typisches Rest-Tages-Tempo: Median-Tageslast der letzten 28 vollen Tage,
+    # gleichmäßig über die Wachstunden verteilt. Grundlage der echten Prognose
+    # nach "jetzt" (statt einer flachen bzw. nur-linearen Kurve).
+    hist = [t for t in daily_trimp[:-1][-FORECAST_DAYS:]]
+    median_daily = statistics.median(hist) if hist else 0.0
+    span = SLEEP_HOUR - WAKE_HOUR
+    hourly_rate = median_daily / span if span else 0.0
+
+    # Ist-Kurve bis "jetzt" (strain) …
     curve = []
     current_trimp = 0.0
     if intr:
         cum = 0.0
-        for h in range(0, 24):
+        for h in range(0, now_hour + 1):
             cum += _zone_trimp(intr[h]) if h < len(intr) else 0.0
-            if WAKE_HOUR <= h <= SLEEP_HOUR:
-                curve.append({"hour": h, "strain": round(trimp_to_strain(cum, tau)), "projected": h > now_hour})
-            if h <= now_hour:
-                current_trimp = cum
+            if WAKE_HOUR <= h:
+                curve.append({"hour": h, "strain": round(trimp_to_strain(cum, tau)), "forecast": None})
+        current_trimp = cum
     else:
-        # No intraday: ramp the full-day trimp linearly across waking hours.
-        full = _day_trimp(today_row, today_workouts)
-        span = SLEEP_HOUR - WAKE_HOUR
-        for h in range(WAKE_HOUR, SLEEP_HOUR + 1):
-            frac = (h - WAKE_HOUR) / span
-            t = full * frac
-            curve.append({"hour": h, "strain": round(trimp_to_strain(t, tau)), "projected": h > now_hour})
-            if h <= now_hour:
-                current_trimp = t
+        # Ohne Intraday-Stream: bisherige Tageslast linear bis "jetzt" aufbauen.
+        so_far = _day_trimp(today_row, today_workouts)
+        denom = max(1, now_hour - WAKE_HOUR)
+        for h in range(WAKE_HOUR, now_hour + 1):
+            t = so_far * (h - WAKE_HOUR) / denom
+            curve.append({"hour": h, "strain": round(trimp_to_strain(t, tau)), "forecast": None})
+        current_trimp = so_far
+
+    # … dann Prognose bis Tagesende (forecast), nahtlos ab "jetzt".
+    if curve:
+        curve[-1]["forecast"] = curve[-1]["strain"]
+    fc_trimp = current_trimp
+    for h in range(now_hour + 1, SLEEP_HOUR + 1):
+        fc_trimp += hourly_rate
+        curve.append({"hour": h, "strain": None, "forecast": round(trimp_to_strain(fc_trimp, tau))})
 
     current = round(trimp_to_strain(current_trimp, tau))
-    projected_full = round(trimp_to_strain(_day_trimp(today_row, today_workouts), tau))
+    projected_full = round(trimp_to_strain(fc_trimp, tau))
 
     low, opt, high = _target_range(recovery, sleep_score, load_ratio)
     remaining = max(0, high - current)

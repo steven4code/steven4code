@@ -1,0 +1,26 @@
+# JarvisHealth — Ein-Befehl-Start:
+#   1. cp backend/.env.example backend/.env   (für Demo-Daten reicht das schon)
+#   2. docker compose up --build
+#   3. http://localhost:5173 öffnen
+#
+# Für echte Google-Health-Daten: GOOGLE_CLIENT_ID/SECRET in backend/.env
+# eintragen (siehe README „Mit Freunden teilen") und USE_MOCK_PROVIDER=false.
+services:
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      # OAuth-Redirect läuft über den Browser des Nutzers -> localhost:8000
+      # muss auch von außen erreichbar sein.
+      - DATABASE_URL=sqlite:////app/data/health.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
