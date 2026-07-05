@@ -31,36 +31,49 @@ React + Vite + Recharts. Läuft komplett lokal.
 
 ---
 
-## 1. Starten — der einfachste Weg (Docker, 3 Befehle)
+## 1. Starten — Download + Doppelklick
 
-Standardmäßig läuft alles mit einem **Demo-Provider** (realistische Beispieldaten,
-deterministisch). Kein Google-Konto nötig. Voraussetzung: [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+1. **Download:** Auf GitHub den grünen **„Code"**-Button → **Download ZIP** → entpacken.
+   (Oder `git clone https://github.com/steven4code/steven4code.git`.)
+2. **Doppelklick:**
+   - **macOS:** `Start-JarvisHealth.command` — beim allerersten Mal
+     **Rechtsklick → Öffnen** (Gatekeeper-Abfrage einmalig bestätigen).
+   - **Windows:** `Start-JarvisHealth.bat` — bei SmartScreen-Hinweis
+     „Weitere Informationen → Trotzdem ausführen".
+3. Der Starter richtet beim ersten Mal alles automatisch ein (ein paar
+   Minuten), startet die App und **öffnet den Browser** auf
+   **http://localhost:8000**. Ab dem zweiten Start dauert es Sekunden.
+
+Einzige Voraussetzung: **Python 3** ([python.org](https://www.python.org/downloads/))
+und **Node.js** ([nodejs.org](https://nodejs.org)) — der Starter sagt es dir,
+falls etwas fehlt, und nutzt alternativ Docker Desktop, wenn vorhanden.
+
+Standardmäßig läuft alles mit einem **Demo-Provider** (realistische
+Beispieldaten). Kein Google-Konto nötig. Unter ⚙ kannst du Max-HF, LTHR,
+Trainingsziel und Schlafbedarf einstellen — das **Trainingsziel steuert den
+Ziel-Mix** der Trainingssysteme.
+
+<details>
+<summary>Alternativen: Docker Compose oder klassisch zwei Terminals</summary>
 
 ```bash
-git clone https://github.com/steven4code/steven4code.git jarvishealth && cd jarvishealth
+# Docker (Frontend auf http://localhost:5173)
 cp backend/.env.example backend/.env
 docker compose up --build
 ```
 
-→ **http://localhost:5173** öffnen. Fertig. Die App synchronisiert beim Start
-automatisch. Unter ⚙ kannst du Max-HF, LTHR, Trainingsziel und Schlafbedarf
-einstellen — das **Trainingsziel steuert den Ziel-Mix** der Trainingssysteme.
-
-<details>
-<summary>Alternative ohne Docker (Python + Node)</summary>
-
 ```bash
-# Backend (Terminal 1)
+# Entwicklung: Backend (Terminal 1)
 cd backend
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env                                   # USE_MOCK_PROVIDER=true
 uvicorn app.main:app --reload --port 8000
 
-# Frontend (Terminal 2)
+# Entwicklung: Frontend mit Hot-Reload (Terminal 2)
 cd frontend
 npm install
-npm run dev
+npm run dev            # http://localhost:5173
 ```
 </details>
 
@@ -77,10 +90,10 @@ So funktioniert es:
 1. **Du (einmalig):** OAuth-Client in der Google Cloud Console anlegen
    (Abschnitt 2 unten) und deine Freunde unter *OAuth consent screen →
    Test users* mit ihrer Gmail-Adresse eintragen (bis zu 100 Testnutzer).
-2. **Jeder Freund:** Repo klonen, deine `backend/.env` bekommen (enthält
-   `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`, `USE_MOCK_PROVIDER=false`),
-   `docker compose up --build`, dann im Login-Screen **„Mit Google anmelden"**
-   mit dem eigenen Konto.
+2. **Jeder Freund:** ZIP herunterladen (Abschnitt 1), deine `backend/.env`
+   hineinkopieren (enthält `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`,
+   `USE_MOCK_PROVIDER=false`), **Doppelklick auf den Starter**, dann im
+   Login-Screen **„Mit Google anmelden"** mit dem eigenen Konto.
 3. Fertig — jede Person sieht ausschließlich die **eigenen** Daten.
 
 Wichtig zu wissen:
