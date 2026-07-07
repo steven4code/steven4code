@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · AnfragePilot{% endblock %}
+{% block content %}
+
+<div class="kpis">
+  <div class="kpi"><div class="num">{{ kpi.gesamt }}</div><div class="lbl">Anfragen gesamt</div></div>
+  <div class="kpi"><div class="num">{{ kpi.offene_freigaben }}</div><div class="lbl">Entwürfe warten auf Freigabe</div></div>
+  <div class="kpi"><div class="num">{{ kpi.prio_a }}</div><div class="lbl">Offene A-Prioritäten</div></div>
+  <div class="kpi"><div class="num">{{ kpi.unvollstaendig }}</div><div class="lbl">Unvollständige Anfragen</div></div>
+</div>
+
+<div class="card">
+  <h2>Fallübersicht &amp; Freigabe-Queue</h2>
+  <p class="muted">
+    Analyse-Modus:
+    {% if llm_aktiv %}KI ({{ llm_model }}) mit regelbasiertem Fallback{% else %}regelbasiert (kein API-Key hinterlegt){% endif %}
+    · Es wird nichts automatisch an Kunden versendet – jede Rückfrage braucht eine manuelle Freigabe.
+  </p>
+
+  <form method="get" action="/" class="filterbar">
+    <div>
+      <label>Status</label>
+      <select name="status">
+        <option value="">alle</option>
+        {% for s in statuswerte %}
+        <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Priorität</label>
+      <select name="prioritaet">
+        <option value="">alle</option>
+        {% for p in ["A", "B", "C"] %}
+        <option value="{{ p }}" {% if filter_prioritaet == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Freigabe</label>
+      <select name="freigabe">
+        <option value="">alle</option>
+        <option value="offen" {% if filter_freigabe == "offen" %}selected{% endif %}>offen</option>
+        <option value="freigegeben" {% if filter_freigabe == "freigegeben" %}selected{% endif %}>freigegeben</option>
+        <option value="abgelehnt" {% if filter_freigabe == "abgelehnt" %}selected{% endif %}>abgelehnt</option>
+        <option value="nicht_noetig" {% if filter_freigabe == "nicht_noetig" %}selected{% endif %}>nicht nötig</option>
+      </select>
+    </div>
+    <div><button type="submit" class="secondary">Filtern</button></div>
+  </form>
+
+  {% if faelle %}
+  <table>
+    <thead>
+      <tr>
+        <th>Fall</th><th>Prio</th><th>Kunde</th><th>Anfrageart</th><th>Ort</th>
+        <th>Fehlende Angaben</th><th>Status</th><th>Freigabe</th><th>Nächster Schritt</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in faelle %}
+      <tr>
+        <td><a href="/fall/{{ f.fall_id }}"><strong>{{ f.fall_id }}</strong></a><br>
+            <span class="muted">{{ f.kanal }} · {{ f.eingang_ts[:10] }}</span></td>
+        <td><span class="badge prio-{{ f.prioritaet }}">{{ f.prioritaet or "–" }}</span></td>
+        <td>{{ f.absender_name or "–" }}<br><span class="muted">{{ f.absender_email }}</span></td>
+        <td>{{ f.anfrageart_label }}</td>
+        <td>{{ f.ort or "?" }}</td>
+        <td>{% if f.fehlende_angaben %}{{ f.fehlende_angaben | length }} fehlen{% else %}vollständig{% endif %}</td>
+        <td><span class="badge">{{ f.status }}</span></td>
+        <td><span class="badge frei-{{ f.freigabe_status }}">{{ f.freigabe_status.replace("_", " ") }}</span></td>
+        <td class="muted">{{ f.naechster_schritt }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Noch keine Anfragen erfasst. <a href="/neu">Erste Anfrage anlegen</a> oder Demo-Daten laden (<code>python seed_demo.py</code>).</p>
+  {% endif %}
+</div>
+
+{% endblock %}

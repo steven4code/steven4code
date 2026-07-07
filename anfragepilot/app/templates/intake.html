@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Neue Anfrage · AnfragePilot{% endblock %}
+{% block content %}
+
+<div class="card" style="max-width: 720px">
+  <h2>Neue Anfrage erfassen</h2>
+  <p class="muted">
+    Simuliert den Eingangskanal (E-Mail oder Website-Formular). In der
+    Pilotphase wird dieser Endpunkt per Webhook aus n8n/Make bzw. dem
+    Kontaktformular gespeist (<code>POST /api/anfragen</code>).
+  </p>
+  <form method="post" action="/neu">
+    <label>Eingangskanal</label>
+    <select name="kanal">
+      <option value="email">E-Mail</option>
+      <option value="formular">Website-Formular</option>
+    </select>
+
+    <label>Name des Absenders</label>
+    <input type="text" name="absender_name" placeholder="z. B. Familie Becker">
+
+    <label>E-Mail-Adresse</label>
+    <input type="email" name="absender_email" placeholder="kunde@example.de">
+
+    <label>Telefon (falls im Formular angegeben)</label>
+    <input type="text" name="telefon" placeholder="0176 …">
+
+    <label>Betreff</label>
+    <input type="text" name="betreff" placeholder="z. B. Angebot Heizungstausch">
+
+    <label>Nachricht *</label>
+    <textarea name="nachricht" required
+      placeholder="Guten Tag, wir möchten im Einfamilienhaus in Ettlingen unsere alte Gasheizung austauschen …"></textarea>
+
+    <label>Anhänge (Dateinamen, kommagetrennt – im MVP nur als Referenz)</label>
+    <input type="text" name="anhaenge" placeholder="heizraum_1.jpg, heizraum_2.jpg">
+
+    <p><button type="submit">Anfrage erfassen &amp; analysieren</button></p>
+  </form>
+</div>
+
+{% endblock %}

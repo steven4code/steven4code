@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Monatsreport · AnfragePilot{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h2>Monatsreport {{ report.monat }}</h2>
+  <form method="get" action="/report" class="filterbar">
+    <div>
+      <label>Monat</label>
+      <select name="monat">
+        {% for m in monate %}
+        <option value="{{ m }}" {% if report.monat == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div><button type="submit" class="secondary">Anzeigen</button></div>
+  </form>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="num">{{ report.anzahl_eingegangen }}</div><div class="lbl">Anfragen eingegangen</div></div>
+  <div class="kpi"><div class="num">{{ report.anzahl_strukturiert }}</div><div class="lbl">Strukturiert aufbereitet</div></div>
+  <div class="kpi"><div class="num">{{ report.anzahl_entwuerfe }}</div><div class="lbl">Rückfrageentwürfe erstellt</div></div>
+  <div class="kpi"><div class="num">{{ report.anteil_unvollstaendig }}%</div><div class="lbl">Anteil unvollständiger Anfragen</div></div>
+  <div class="kpi"><div class="num">{{ report.anzahl_freigegeben }}</div><div class="lbl">Entwürfe freigegeben</div></div>
+  <div class="kpi"><div class="num">~{{ report.ersparnis_minuten }} min</div><div class="lbl">Geschätzte eingesparte Bürozeit*</div></div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2>Häufigste fehlende Angaben</h2>
+    {% if report.top_fehlende %}
+    <table>
+      {% for feld, anzahl in report.top_fehlende %}
+      <tr><td>{{ feld }}</td><td style="text-align:right">{{ anzahl }}×</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">Keine Daten.</p>{% endif %}
+
+    <h3>Prioritäten</h3>
+    <table>
+      <tr><td><span class="badge prio-A">A</span> dringend / hoher Wert</td><td style="text-align:right">{{ report.prioritaeten.A }}</td></tr>
+      <tr><td><span class="badge prio-B">B</span> normal</td><td style="text-align:right">{{ report.prioritaeten.B }}</td></tr>
+      <tr><td><span class="badge prio-C">C</span> unklar / geringe Passung</td><td style="text-align:right">{{ report.prioritaeten.C }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Prozessqualität</h2>
+    <table>
+      <tr><td>Ø Zeit bis Freigabe der Rückfrage</td>
+          <td style="text-align:right">{% if report.avg_minuten_bis_freigabe is not none %}{{ report.avg_minuten_bis_freigabe }} min{% else %}–{% endif %}</td></tr>
+      <tr><td>Entwürfe abgelehnt (Qualitätsfeedback)</td><td style="text-align:right">{{ report.anzahl_abgelehnt }}</td></tr>
+      <tr><td>KI-Fehlerfälle (Fallback genutzt)</td><td style="text-align:right">{{ report.ki_fehlerfaelle }}</td></tr>
+    </table>
+
+    <h3>Status-Verteilung</h3>
+    <table>
+      {% for status, anzahl in report.status_verteilung.items() %}
+      <tr><td>{{ status }}</td><td style="text-align:right">{{ anzahl }}</td></tr>
+      {% endfor %}
+    </table>
+
+    <h3>Eingangskanäle</h3>
+    <table>
+      {% for kanal, anzahl in report.kanaele.items() %}
+      <tr><td>{{ kanal }}</td><td style="text-align:right">{{ anzahl }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+<p class="muted">* Konservative Annahme aus dem ROI-Modell: 30 % Ersparnis bei
+25 min Vorqualifikation je Anfrage (= 7,5 min pro strukturierter Anfrage).
+Als plausibles Szenario kommunizieren, nicht als Garantie.</p>
+
+{% endblock %}

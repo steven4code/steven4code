@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}{{ fall.fall_id }} · AnfragePilot{% endblock %}
+{% block content %}
+
+<p><a href="/">← zurück zum Dashboard</a></p>
+
+<div class="card">
+  <h2>{{ fall.fall_id }} · {{ fall.anfrageart_label }}
+    <span class="badge prio-{{ fall.prioritaet }}">Prio {{ fall.prioritaet or "–" }}</span>
+    <span class="badge">{{ fall.status }}</span>
+    <span class="badge frei-{{ fall.freigabe_status }}">Freigabe: {{ fall.freigabe_status.replace("_", " ") }}</span>
+  </h2>
+  <p class="muted">
+    Eingang: {{ fall.eingang_ts }} · Kanal: {{ fall.kanal }} · Gewerk: {{ fall.gewerk }}
+    {% if fall.duplikat_von %} · <strong style="color:#b4372d">Mögliche Dublette zu {{ fall.duplikat_von }}</strong>{% endif %}
+  </p>
+  <p><strong>KI-Zusammenfassung:</strong> {{ fall.zusammenfassung or "–" }}</p>
+  <p class="muted"><strong>Nächster Schritt:</strong> {{ fall.naechster_schritt or "–" }}</p>
+</div>
+
+<div class="grid2">
+  <div>
+    <div class="card">
+      <h2>Originalanfrage</h2>
+      <p>
+        <strong>{{ fall.absender_name or "Unbekannter Absender" }}</strong>
+        {% if fall.absender_email %}&lt;{{ fall.absender_email }}&gt;{% endif %}
+        {% if fall.telefon %} · ☎ {{ fall.telefon }}{% endif %}
+      </p>
+      {% if fall.betreff %}<p><strong>Betreff:</strong> {{ fall.betreff }}</p>{% endif %}
+      <pre>{{ fall.rohtext }}</pre>
+      {% if fall.anhaenge %}
+      <p class="muted">Anhänge: {{ fall.anhaenge | join(", ") }}</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Analyse</h2>
+      <h3>Bekannte Angaben ({{ fall.vorhandene_angaben | length }})</h3>
+      {% if fall.vorhandene_angaben %}
+      <table>
+        {% for a in fall.vorhandene_angaben %}
+        <tr><td style="width:45%">{{ a.feld }}</td><td>{{ a.wert }}</td></tr>
+        {% endfor %}
+      </table>
+      {% else %}<p class="muted">Keine strukturiert erkannten Angaben.</p>{% endif %}
+
+      <h3>Fehlende Angaben ({{ fall.fehlende_angaben | length }})</h3>
+      {% if fall.fehlende_angaben %}
+      <ul class="plain">{% for f in fall.fehlende_angaben %}<li>{{ f }}</li>{% endfor %}</ul>
+      {% else %}<p class="muted">Alle Pflichtangaben vorhanden.</p>{% endif %}
+
+      {% if fall.unsichere_angaben %}
+      <h3>Unsichere Angaben</h3>
+      <ul class="plain">{% for u in fall.unsichere_angaben %}<li>{{ u }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      {% if fall.unsicherheiten %}
+      <h3>Unsicherheiten / Risiken</h3>
+      <ul class="plain">{% for u in fall.unsicherheiten %}<li>{{ u }}</li>{% endfor %}</ul>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Internes Angebots-Briefing</h2>
+      <pre>{{ fall.internes_briefing or "–" }}</pre>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Rückfrageentwurf (Freigabe-Queue)</h2>
+      {% if fall.rueckfrage_entwurf %}
+        <div class="hinweis">Human-in-the-loop: Dieser Entwurf wird <strong>nicht automatisch versendet</strong>.
+          Prüfen, ggf. anpassen, dann freigeben.</div>
+        <form method="post" action="/fall/{{ fall.fall_id }}/entwurf">
+          <textarea name="entwurf" rows="14">{{ fall.rueckfrage_entwurf }}</textarea>
+          <p><button type="submit" class="secondary">Entwurf speichern</button></p>
+        </form>
+        <form method="post" action="/fall/{{ fall.fall_id }}/freigabe" class="inline">
+          <input type="hidden" name="aktion" value="freigeben">
+          <button type="submit">✓ Freigeben</button>
+        </form>
+        <form method="post" action="/fall/{{ fall.fall_id }}/freigabe" class="inline">
+          <input type="hidden" name="aktion" value="ablehnen">
+          <button type="submit" class="danger">✗ Ablehnen</button>
+        </form>
+        {% if fall.freigabe_status == "freigegeben" and fall.absender_email %}
+          <p style="margin-top:0.8rem"><a class="btn secondary" href="{{ mailto }}">✉ Im Mailprogramm öffnen &amp; senden</a></p>
+        {% endif %}
+      {% else %}
+        <p class="muted">Kein Rückfrageentwurf nötig – die Anfrage ist vollständig.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Bearbeitung</h2>
+      <form method="post" action="/fall/{{ fall.fall_id }}/status">
+        <label>Status manuell setzen</label>
+        <select name="status">
+          {% for s in statuswerte %}
+          <option value="{{ s }}" {% if fall.status == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+        <p><button type="submit" class="secondary">Status übernehmen</button></p>
+      </form>
+      <form method="post" action="/fall/{{ fall.fall_id }}/verantwortlicher">
+        <label>Verantwortlich</label>
+        <input type="text" name="name" value="{{ fall.verantwortlicher }}" placeholder="z. B. Büro / Meister M.">
+        <p><button type="submit" class="secondary">Speichern</button></p>
+      </form>
+      <p class="muted">Letzte Aktion: {{ fall.letzte_aktion }} · {{ fall.updated_at }}</p>
+    </div>
+
+    <div class="card">
+      <h2>KI-Output-Log</h2>
+      {% for o in ai_outputs %}
+      <p class="muted">{{ o.created_at }} · {{ o.output_type }} · Modell: {{ o.model }}
+        {% if o.error %}<br><strong style="color:#b4372d">Fehler: {{ o.error }}</strong>{% endif %}</p>
+      {% else %}
+      <p class="muted">Keine KI-Ausgaben protokolliert.</p>
+      {% endfor %}
+    </div>
+
+    <div class="card">
+      <h2>Audit-Log</h2>
+      <table>
+        {% for a in audit %}
+        <tr>
+          <td class="muted" style="white-space:nowrap">{{ a.created_at[5:16].replace("T", " ") }}</td>
+          <td>{{ a.action_type.replace("_", " ") }}
+            {% if a.old_value or a.new_value %}<span class="muted">{{ a.old_value }}{% if a.old_value and a.new_value %} → {% endif %}{{ a.new_value }}</span>{% endif %}
+            {% if a.comment %}<span class="muted">({{ a.comment }})</span>{% endif %}
+          </td>
+          <td class="muted">{{ a.actor }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
